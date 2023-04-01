@@ -15,6 +15,30 @@
 #define PORT "3490"
 #define BACKLOG 10
 
+void sigchld_handler(int s)
+{
+    // wait for the child process to be reaped
+    int saved_errno = errno;
+    while (waitpid(-1, NULL, WNOHANG) > 0);
+    errno = saved_errno;
+}
+
+void setup_signal_handler(){
+    struct sigaction sa;
+    // set handler for sigchld signal
+    sa.sa_handler = sigchld_handler;
+    // clear the sig mask
+    sigemptyset(&sa.sa_mask);
+    // set flags
+    sa.sa_flags = SA_RESTART;
+
+    if (sigaction(SIGCHLD, &sa, NULL) != 0)
+    {
+        perror("Not able to set handler");
+        exit(1);
+    }
+}
+
 void *client_routine() {
     printf("Coming here in client\n");
     int sockfd, new_fd;
@@ -69,6 +93,7 @@ void *client_routine() {
 }
 
 void *server_routine() {
+    setup_signal_handler();
     printf("Coming here in server\n");
     int sockfd, new_fd;
     struct addrinfo hints, *server_info, *iter;
@@ -126,24 +151,37 @@ void *server_routine() {
             continue;
         }
 
-        // receive command from client
-        char buf[100];
-        int numbytes;
-        if((numbytes = recv(new_fd, buf, sizeof(buf)-1, 0)) == -1){
-            perror("Not able to receive");
+
+        // spawn a child for waiting
+        pid_t child = fork();
+        if(child == 0){
+            close(sockfd);
+            // receive command from client
+            char buf[100];
+            int numbytes;
+            if((numbytes = recv(new_fd, buf, sizeof(buf)-1, 0)) == -1){
+                perror("Not able to receive");
+                close(new_fd);
+                exit(1);
+            }
+            buf[numbytes] = '\0';
+            printf("Yeah!!, received command from client %s\n", buf);
+            FILE *file;
+            file = popen(buf, "r");
+            if(file == NULL){
+                perror("Unable to execute command");
+                close(new_fd);
+                exit(1);
+            }
+            char result[100];
+            while(fgets(result, 100, file)){
+                send(new_fd, result, strlen(result), 0);
+            }
+            close(new_fd);
+            exit(0);
         }
-        buf[numbytes] = '\0';
-        printf("Yeah!!, received command from client %s\n", buf);
-        FILE *file;
-        file = popen(buf, "r");
-        if(file == NULL){
-            perror("Unable to execute command");
-            continue;
-        }
-        char result[100];
-        while(fgets(result, 100, file)){
-            send(new_fd, result, strlen(result), 0);
-        }
+        
+        close(new_fd);
     }
 }
 
