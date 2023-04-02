@@ -12,23 +12,35 @@
 #include <signal.h>
 #include <pthread.h>
 
-#define PORT "3490"
 #define BACKLOG 10
 #define MAX_BUFFER_LEN 512
 #define PEER_COUNT 10
 
 char *PEER_LIST[PEER_COUNT] = {
-    "127.0.0.1:18000",
-    "127.0.0.1:18001",
-    "127.0.0.1:18002",
-    "127.0.0.1:18003",
-    "127.0.0.1:18004",
-    "127.0.0.1:18005",
-    "127.0.0.1:18006",
-    "127.0.0.1:18007",
-    "127.0.0.1:18008",
-    "127.0.0.1:18009"
+    "18000",
+    "18001",
+    "18002",
+    "18003",
+    "18004",
+    "18005",
+    "18006",
+    "18007",
+    "18008",
+    "18009"
 };
+
+// char *PEER_LIST[PEER_COUNT] = {
+//     "3490",
+//     "3490",
+//     "3490",
+//     "3490",
+//     "3490",
+//     "3490",
+//     "3490",
+//     "3490",
+//     "3490",
+//     "3490"
+// };
 
 struct args {
     char *command;
@@ -60,8 +72,8 @@ void setup_signal_handler(){
 }
 
 void *connect_cord(void *input){
-    char *command = ((strut args *)input)->command;
-    int vm_id = ((strut args *)input)->id;
+    char *command = ((struct args *)input)->command;
+    int vm_id = ((struct args *)input)->vm_id;
     int sockfd, new_fd;
     struct addrinfo hints, *server_info, *iter;
     memset(&hints, 0, sizeof hints);
@@ -71,19 +83,20 @@ void *connect_cord(void *input){
     int addr_status;
     if((addr_status = getaddrinfo("localhost", PEER_LIST[vm_id], &hints, &server_info)) != 0){
         fprintf(stderr, "addrinfo error %s\n", gai_strerror(addr_status));
-        exit(1);
+        return 0;
+        // exit(1);
     }
     // iterate the server info struct
     for(iter = server_info; iter != NULL; iter = iter->ai_next){
         // try to sock it
         if((sockfd = socket(iter->ai_family, iter->ai_socktype, iter->ai_protocol)) == -1){
-            fprintf(stderr, "unable to connect to socket\n");
+            // fprintf(stderr, "unable to connect to socket\n");
             continue;
         }
         //try connect
         if(connect(sockfd, iter->ai_addr, iter->ai_addrlen) == -1){
             close(sockfd);
-            fprintf(stderr, "unable to connect\n");
+            // fprintf(stderr, "unable to connect to port: %s\n", PEER_LIST[vm_id]);
             continue;
         }
 
@@ -91,13 +104,15 @@ void *connect_cord(void *input){
     }
     if(iter == NULL) {
         fprintf(stderr, "Unable to find usable address\n");
-        exit(1);
+        // exit(1);
+        return 0;
     }
 
     freeaddrinfo(server_info);
     if(send(sockfd, command, strlen(command), 0) == -1){
         fprintf(stderr, "Unable to send command\n");
-        exit(1);
+        // exit(1);
+        return 0;
     }
 
     // keep on recieveing routine
@@ -112,17 +127,17 @@ void *connect_cord(void *input){
 
 void connect_to_servers(char *command){
     pthread_t tids[PEER_COUNT];
-
+    struct args *arg[PEER_COUNT];
     for(int i = 0; i < PEER_COUNT; i++) {
-        struct args = {
-            .command = command,
-            .vm_id = i
-        }
-        pthread_create(&tids[i], NULL, connect_cord, &args);
+        arg[i] = (struct args *)malloc(sizeof(struct args));
+        arg[i]->command = command;
+        arg[i]->vm_id = i;
+        pthread_create(&tids[i], NULL, connect_cord, (void *)arg[i]);
     }
 
     for(int i = 0; i< PEER_COUNT; i++){
-        pthread_join(tid[i], NULL);
+        pthread_join(tids[i], NULL);
+        free(arg[i]);
     }
 }
 
@@ -165,9 +180,9 @@ void serve_commands(int client_fd) {
     exit(0);
 }
 
-void *server_routine() {
+void *server_routine(void *input) {
+    int vm_id = *(int *)input;
     setup_signal_handler();
-    printf("Coming here in server\n");
     int sockfd, new_fd;
     struct addrinfo hints, *server_info, *iter;
     int yes = 1;
@@ -176,7 +191,7 @@ void *server_routine() {
     hints.ai_flags = AI_PASSIVE;
     hints.ai_socktype = SOCK_STREAM;
     int addr_status;
-    if((addr_status = getaddrinfo(NULL, PORT, &hints, &server_info)) != 0){
+    if((addr_status = getaddrinfo(NULL, PEER_LIST[vm_id], &hints, &server_info)) != 0){
         fprintf(stderr, "addrinfo error %s\n", gai_strerror(addr_status));
         exit(1);
     }
@@ -184,13 +199,13 @@ void *server_routine() {
     for(iter = server_info; iter != NULL; iter = iter->ai_next){
         // try to sock it
         if((sockfd = socket(iter->ai_family, iter->ai_socktype, iter->ai_protocol)) == -1){
-            fprintf(stderr, "unable to connect to socket\n");
+            // fprintf(stderr, "unable to connect to socket\n");
             continue;
         }
         // try socket reuse
         if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1){
             close(sockfd);
-            fprintf(stderr, "unable to set socket option\n");
+            // fprintf(stderr, "unable to set socket option\n");
             continue;
         }
         //try binding
@@ -213,7 +228,7 @@ void *server_routine() {
         exit(1);
     }
 
-    printf("Listening to the port: %s\n", PORT);
+    printf("Listening to the port: %s\n", PEER_LIST[vm_id]);
     // listen for new connections
     struct sockaddr_storage client_addr;
     socklen_t addr_size = sizeof client_addr;
@@ -237,12 +252,34 @@ void *server_routine() {
     }
 }
 
-int main(){
+void *start_multiple_servers() {
+    pthread_t tids[PEER_COUNT];
+    int *vm_ids[PEER_COUNT];
+    for(int i = 0; i < PEER_COUNT; i++) {
+        vm_ids[i] = (int *)malloc(sizeof(int));
+        *(vm_ids[i]) = i;
+        pthread_create(&tids[i], NULL, server_routine, vm_ids[i]);
+    }
+
+    for(int i = 0; i< PEER_COUNT; i++){
+        pthread_join(tids[i], NULL);
+        free(vm_ids[i]);
+    }
+
+}
+
+int main(int argc, char *argv[]){
     pthread_t client, server;
+    int id = 0;
+    if(argc == 2){
+        // start multiple servers on the same machine
+        
+    }
     pthread_create(&client, NULL, client_routine, NULL);
-    // pthread_create(&server, NULL, server_routine, NULL);
+    // pthread_create(&server, NULL, server_routine, &id);
+    pthread_create(&server, NULL, start_multiple_servers, NULL);
 
     pthread_join(client, NULL);
-    // pthread_join(server, NULL);
+    pthread_join(server, NULL);
     return 0;
 }
