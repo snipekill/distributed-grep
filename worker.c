@@ -14,6 +14,26 @@
 
 #define PORT "3490"
 #define BACKLOG 10
+#define MAX_BUFFER_LEN 512
+#define PEER_COUNT 10
+
+char *PEER_LIST[PEER_COUNT] = {
+    "127.0.0.1:18000",
+    "127.0.0.1:18001",
+    "127.0.0.1:18002",
+    "127.0.0.1:18003",
+    "127.0.0.1:18004",
+    "127.0.0.1:18005",
+    "127.0.0.1:18006",
+    "127.0.0.1:18007",
+    "127.0.0.1:18008",
+    "127.0.0.1:18009"
+};
+
+struct args {
+    char *command;
+    int vm_id;
+};
 
 void sigchld_handler(int s)
 {
@@ -39,8 +59,9 @@ void setup_signal_handler(){
     }
 }
 
-void *client_routine() {
-    printf("Coming here in client\n");
+void *connect_cord(void *input){
+    char *command = ((strut args *)input)->command;
+    int vm_id = ((strut args *)input)->id;
     int sockfd, new_fd;
     struct addrinfo hints, *server_info, *iter;
     memset(&hints, 0, sizeof hints);
@@ -48,7 +69,7 @@ void *client_routine() {
     hints.ai_flags = AI_PASSIVE;
     hints.ai_socktype = SOCK_STREAM;
     int addr_status;
-    if((addr_status = getaddrinfo("localhost", PORT, &hints, &server_info)) != 0){
+    if((addr_status = getaddrinfo("localhost", PEER_LIST[vm_id], &hints, &server_info)) != 0){
         fprintf(stderr, "addrinfo error %s\n", gai_strerror(addr_status));
         exit(1);
     }
@@ -74,22 +95,74 @@ void *client_routine() {
     }
 
     freeaddrinfo(server_info);
-    printf("Enter the command you want to execute on remote machine\n");
-    char command[100];
-    // gets(command);
-    fgets(command, 100, stdin);
     if(send(sockfd, command, strlen(command), 0) == -1){
         fprintf(stderr, "Unable to send command\n");
         exit(1);
     }
 
     // keep on recieveing routine
-    char result[100];
+    char result[MAX_BUFFER_LEN];
     int numbytes;
-    while((numbytes = recv(sockfd, result, sizeof(result), 0))>0){
+    while((numbytes = recv(sockfd, result, MAX_BUFFER_LEN - 1, 0))>0){
         result[numbytes] = '\0';
         printf("%s", result);
+        memset(result, 0, MAX_BUFFER_LEN);
     }
+}
+
+void connect_to_servers(char *command){
+    pthread_t tids[PEER_COUNT];
+
+    for(int i = 0; i < PEER_COUNT; i++) {
+        struct args = {
+            .command = command,
+            .vm_id = i
+        }
+        pthread_create(&tids[i], NULL, connect_cord, &args);
+    }
+
+    for(int i = 0; i< PEER_COUNT; i++){
+        pthread_join(tid[i], NULL);
+    }
+}
+
+void *client_routine() {
+    printf("Coming here in client\n");
+    char command[MAX_BUFFER_LEN];
+    while(1) {
+        memset(command, MAX_BUFFER_LEN, 0);
+        printf("Enter the command you want to execute \n");
+        fgets(command, MAX_BUFFER_LEN, stdin);
+
+        connect_to_servers(command);
+    }
+}
+
+void serve_commands(int client_fd) {
+    char command[MAX_BUFFER_LEN];
+    char result[MAX_BUFFER_LEN];
+    int numbytes;
+    printf("Waiting for client to send command\n");
+    if((numbytes = recv(client_fd, command, MAX_BUFFER_LEN-1, 0)) == -1){
+        perror("Not able to receive the command");
+        strcpy(result, "Not able to receive the command");
+        send(client_fd, result, strlen(result), 0);
+    }
+    command[numbytes] = '\0';
+    printf("Successfully received command from client %s\n", command);
+    FILE *file;
+    file = popen(command, "r");
+    if(file == NULL){
+        perror("Unable to execute command");
+        strcpy(result, "Unable to execute command");
+        send(client_fd, result, strlen(result), 0);
+    }
+
+    while(fgets(result, MAX_BUFFER_LEN, file)){
+        send(client_fd, result, strlen(result), 0);
+    }
+    close(client_fd);
+    exit(0);
 }
 
 void *server_routine() {
@@ -157,28 +230,7 @@ void *server_routine() {
         if(child == 0){
             close(sockfd);
             // receive command from client
-            char buf[100];
-            int numbytes;
-            if((numbytes = recv(new_fd, buf, sizeof(buf)-1, 0)) == -1){
-                perror("Not able to receive");
-                close(new_fd);
-                exit(1);
-            }
-            buf[numbytes] = '\0';
-            printf("Yeah!!, received command from client %s\n", buf);
-            FILE *file;
-            file = popen(buf, "r");
-            if(file == NULL){
-                perror("Unable to execute command");
-                close(new_fd);
-                exit(1);
-            }
-            char result[100];
-            while(fgets(result, 100, file)){
-                send(new_fd, result, strlen(result), 0);
-            }
-            close(new_fd);
-            exit(0);
+            serve_commands(new_fd);
         }
         
         close(new_fd);
@@ -188,9 +240,9 @@ void *server_routine() {
 int main(){
     pthread_t client, server;
     pthread_create(&client, NULL, client_routine, NULL);
-    pthread_create(&server, NULL, server_routine, NULL);
+    // pthread_create(&server, NULL, server_routine, NULL);
 
     pthread_join(client, NULL);
-    pthread_join(server, NULL);
+    // pthread_join(server, NULL);
     return 0;
 }
