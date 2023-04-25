@@ -15,7 +15,7 @@ class Member {
     std::string Serialize() const;
     static std::optional<Member> Deserialize(std::string data);
     Member(std::string _uid, std::string address, unsigned int port);
-    Member(std::string _uid, std::string address, unsigned int port, unsigned int pings_dropped);
+    // Member(std::string _uid, std::string address, unsigned int port, unsigned int pings_dropped);
     Member();
     bool operator==(const Member& member) {
         return member._uid == _uid && member.address == address && member.port == port;

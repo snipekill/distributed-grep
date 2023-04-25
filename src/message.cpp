@@ -24,7 +24,6 @@ std::optional<Message> Message::Deserialize(std::string serialized_message) {
     if(data.size() == 0) {
         return std::nullopt;
     }
-    // std::cout<<"what the "<<data.size()<<"\n";
     std::vector<Member> members;
     for(unsigned int i = 1; i < data.size(); ++i) {
         std::optional<Member> member = Member::Deserialize(data[i]);
@@ -33,7 +32,7 @@ std::optional<Message> Message::Deserialize(std::string serialized_message) {
         }
     }
 
-    Message m{static_cast<MESSAGE_TYPE>(stoi(data[0])), members};
+    Message m{static_cast<MESSAGE_TYPE>(stoul(data[0])), members};
 
     return { m };
 }

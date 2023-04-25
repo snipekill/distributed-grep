@@ -5,8 +5,8 @@
 #include <socket.hpp>
 #include <constants.hpp>
 #include <string>
-// #include <atomic>
-// #include <chrono>
+#include <atomic>
+#include <chrono>
 #include <mutex>
 #include <vector>
 #include<string>
@@ -44,7 +44,6 @@ void Node::pingMonitors()
     {
         if (is_member)
         {
-            std::cout<<"coming inside "<<getMonitors().size()<<"\n";
             for (const Member &member : getMonitors())
             {
                 mutex_.lock();
@@ -57,7 +56,6 @@ void Node::pingMonitors()
                 }
                 Message msgOutbound{MESSAGE_TYPE::PING, {}};
                 Socket::SendMessage(Message::Serialize(msgOutbound), iter->port, iter->address);
-                std::cout<<"cmoing ehre "<<iter->pings_dropped<<"\n";
                 mutex_.unlock();
             }
         }
@@ -69,9 +67,6 @@ void Node::pingMonitors()
 void Node::handleIncomingMessages()
 {
     std::optional<Socket> opt_socket = Socket::constructReceiver(port_, "localhost");
-    if(opt_socket.has_value()){
-        std::cout<<"proper setup\n";
-    }
     Socket socket = std::move(*opt_socket);
     while (true)
     {
@@ -84,17 +79,11 @@ void Node::handleIncomingMessages()
                 case MESSAGE_TYPE::JOIN:
                 {
                     // check if the corresponding machine is introducer and is a member
-                    std::cout<<"is_introducer "<<is_introducer_<<"\n";
-                    std::cout<<data_packet.address<<" "<<data_packet.port<<"\n";
-                    std::cout<<data_packet.data<<"\n";
-                    std::cout<<received_msg.getMembers().size()<<"\n";
                     if (is_introducer_ && received_msg.getMembers().size() > 0)
                     {
                         Member received_member = received_msg.getMembers()[0];
                         if ((data_packet.address == env_vars::INTRODUCER_ADDRESS && received_member.port == env_vars::INTRODUCER_PORT) || is_member)
                         {
-                            
-                            std::cout<<"coming here finally\n";
                             std::string machine_id = received_member._uid + data_packet.address;
                             Member new_member{machine_id, data_packet.address, received_member.port};
 
@@ -123,7 +112,6 @@ void Node::handleIncomingMessages()
                     break;
                 }
                 case MESSAGE_TYPE::PING: {
-                    // std::cout<<"Superficial \n";
                     if(is_member && !received_msg.getMembers().empty()) {
                         Message msgOutbound{MESSAGE_TYPE::PING_ACK, { self__}};
                         Socket::SendMessage(Message::Serialize(msgOutbound), data_packet.port, data_packet.address);
@@ -215,7 +203,7 @@ void Node::handleLeave(Member &leaving_member) {
 void Node::handleUserCommands()
 {
     std::string command;
-    std::cout << "Commands you can execute: 1. JOIN\n";
+    std::cout << "Commands you can execute:-\n 1. JOIN\n2. LIST_MEM\n3. LEAVE\n";
     do
     {
         std::cin >> command;
@@ -231,10 +219,7 @@ void Node::handleUserCommands()
             Member cur_mem{machine_id, "localhost", port_};
             Message msgToJoin{MESSAGE_TYPE::JOIN, {cur_mem}};
             // send message to the introducer asking to join
-            std::cout<<Message::Serialize(msgToJoin)<<"\n";
-            std::cout<<"Port "<<port_<<"\n";
-            bool status = Socket::SendMessage(Message::Serialize(msgToJoin), env_vars::INTRODUCER_PORT, env_vars::INTRODUCER_ADDRESS);
-            std::cout<<"status "<<status<<"\n";
+            Socket::SendMessage(Message::Serialize(msgToJoin), env_vars::INTRODUCER_PORT, env_vars::INTRODUCER_ADDRESS);
         }
         else if(command == "LIST_MEM") {
             for(const Member& member: members) {
