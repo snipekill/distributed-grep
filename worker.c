@@ -29,19 +29,6 @@ char *PEER_LIST[PEER_COUNT] = {
     "18009"
 };
 
-// char *PEER_LIST[PEER_COUNT] = {
-//     "3490",
-//     "3490",
-//     "3490",
-//     "3490",
-//     "3490",
-//     "3490",
-//     "3490",
-//     "3490",
-//     "3490",
-//     "3490"
-// };
-
 struct args {
     char *command;
     int vm_id;
