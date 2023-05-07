@@ -1,4 +1,4 @@
-# Distributed Group Membership service
+# Distributed Group Membership Service
 
 This service maintains, at each machine in the system (at a daemon process), a
 list of the other machines that are connected and up. This membership list is a
@@ -27,6 +27,7 @@ The protocol followed by the system for implementing the requirements are as fol
 - Each machine monitors its 3 successive neighbors and periodically send pings to ensure the machines are alive.
 - Once threshold pings have been dropped by a machine, the monitor declare the machine as dead and sends the updates to its successors, which dessiminate them further to their successors in the ring.
 - Once a machine receives the `LEAVE` message for its machine, it voluntarily leaves the ring and must join the ring again.
+- It uses UDP instead of TCP as transport layer, as it is faster than TCP, though unreliable, which is taken into account.
 
 ### Different Message Types
 
@@ -36,4 +37,17 @@ The protocol followed by the system for implementing the requirements are as fol
 - `PING` - Sent by monitors to the machines they are monitoring at configurable periodic intervals.
 - `PING_ACK` - Sent as a response to the incoming ping from monitors to alert their live status.
 - `LEAVE` - Sent by the VM who voluntarily wants to leave the group or it can also be sent by monitors to alert their successors that one of the machine it was monitoring has exceeded the time threshold to respond.
+
+### Instructions for running
+
+- Run `make`
+- Run `./bin/exec {machine-id} {is_introducer(0 or 1)} {port}`
+- Port for introducer should be `3000`.
+- Here are the user commands you can execute:-
+  - `JOIN` - to join the group
+  - `LEAVE` - to leave the group
+  - `LIST_SELF` - To print self membership details
+  - `LIST_MEM` - List Membership list at the host
+
+
 
