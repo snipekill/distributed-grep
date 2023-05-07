@@ -10,7 +10,7 @@ full membership list, and needs to be updated whenever:
 
 Here we are implementing a crash/fail stop model i.e. when a machine rejoins, it must do so by establishing a new id.
 
-To implement this concept, the different incarcenation of same machine are distingished by timestamp. Effectively, a node or machine is uniquely identified by:-
+To implement this concept, the different incarceration of the same machine is distinguished by timestamp. Effectively, a node or machine is uniquely identified by:-
 
 `Node_id := machine_id(given by user) + timestamp + IP_Address`
 
@@ -24,8 +24,8 @@ The protocol followed by the system for implementing the requirements are as fol
 
 - Each machine first pings `Introducer` (which is also part of the ring), which then acks back with the latest membership list to the sender.
 - Introducer must be live for any new members to join. Failure of Introducer does not affect the current members.
-- Each machine monitors its 3 successive neighbors and periodically send pings to ensure the machines are alive.
-- Once threshold pings have been dropped by a machine, the monitor declare the machine as dead and sends the updates to its successors, which dessiminate them further to their successors in the ring.
+- Each machine monitors its 3 successive neighbors and periodically sends pings to ensure the machines are alive.
+- Once threshold pings have been dropped by a machine, the monitor declares the machine as dead and sends the update to its successors, which disseminates this info further to its successors in the ring.
 - Once a machine receives the `LEAVE` message for its machine, it voluntarily leaves the ring and must join the ring again.
 - It uses UDP instead of TCP as transport layer, as it is faster than TCP, though unreliable, which is taken into account.
 
@@ -35,8 +35,8 @@ The protocol followed by the system for implementing the requirements are as fol
 - `JOIN_ACK` - Sent by the introducer to the sender along with the membership list, this acknowledges the entry of new member to the group.
 - `INTRODUCE` - Sent by the introducer to its successors in the ring to introduce the new member joined in the group.
 - `PING` - Sent by monitors to the machines they are monitoring at configurable periodic intervals.
-- `PING_ACK` - Sent as a response to the incoming ping from monitors to alert their live status.
-- `LEAVE` - Sent by the VM who voluntarily wants to leave the group or it can also be sent by monitors to alert their successors that one of the machine it was monitoring has exceeded the time threshold to respond.
+- `PING_ACK` - Sent as a response to the incoming ping from monitors to alert its live status.
+- `LEAVE` - Sent by the VM who voluntarily wants to leave the group or it can also be sent by monitors to alert its successors that one of the machines it was monitoring has exceeded the threshold time to respond.
 
 ### Instructions for running
 
