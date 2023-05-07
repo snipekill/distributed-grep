@@ -54,7 +54,7 @@ void Node::pingMonitors()
                     handleLeave(*iter);
                     // logic for leaving
                 }
-                Message msgOutbound{MESSAGE_TYPE::PING, {}};
+                Message msgOutbound{MESSAGE_TYPE::PING, {self__}};
                 Socket::SendMessage(Message::Serialize(msgOutbound), iter->port, iter->address);
                 mutex_.unlock();
             }
@@ -107,24 +107,29 @@ void Node::handleIncomingMessages()
                 case MESSAGE_TYPE::INTRODUCE: {
                     if(is_member && !received_msg.getMembers().empty()){
                         Member new_member = received_msg.getMembers().at(0);
+                        std::cout<<"Receiving Introduce for "<<new_member.address<<":"<<new_member.port<<"\n";
                         handleIntroduce(new_member);
                     }
                     break;
                 }
                 case MESSAGE_TYPE::PING: {
                     if(is_member && !received_msg.getMembers().empty()) {
+                        Member pinging_member = received_msg.getMembers().at(0);
+                        std::cout<<"Receiving Ping from "<<pinging_member.address<<":"<<pinging_member.port<<"\n";
                         Message msgOutbound{MESSAGE_TYPE::PING_ACK, { self__}};
-                        Socket::SendMessage(Message::Serialize(msgOutbound), data_packet.port, data_packet.address);
+                        Socket::SendMessage(Message::Serialize(msgOutbound), pinging_member.port, pinging_member.address);
                     }
                     break;
                 }
                 case MESSAGE_TYPE::PING_ACK: {
                      if(is_member && !received_msg.getMembers().empty()) {
                         Member acking_member = received_msg.getMembers().at(0);
+                        std::cout<<"Receiving Ping ack from "<<acking_member.address<<":"<<acking_member.port<<"\n";
                         mutex_.lock();
                         std::vector<Member>::iterator iter = std::find(members.begin(), members.end(), acking_member);
                         if(iter == members.end()) {
                             mutex_.unlock();
+                            break;
                         }
                         iter->pings_dropped = 0;
                         mutex_.unlock();
@@ -150,18 +155,25 @@ void Node::handleIntroduce(const Member& new_member) {
         mutex_.unlock();
         return;
     }
-    std::string msgOutbound = Message::Serialize(Message{MESSAGE_TYPE::INTRODUCE, { new_member}});
-    for(const Member& member: getMonitors()){
-        Socket::SendMessage(msgOutbound, member.port, member.address);
-    }
+    new_member.printDetails();
     members.push_back(new_member);
     mutex_.unlock();
+    std::string msgOutbound = Message::Serialize(Message{MESSAGE_TYPE::INTRODUCE, { new_member}});
+    // std::cout<<"Message fpr outbounf "<<msgOutbound<<"\n";
+    for(const Member& member: getMonitors()){
+        // std::cout<<"coming inside the loop"<<"\n";
+        Socket::SendMessage(msgOutbound, member.port, member.address);
+    }
+    // std::cout<<"coming here babcy\n";
+    // std::cout<<"size = "<<members.size()<<"\n";
 }
 
 void Node::handleJoin(Member &new_member) {
     // construct a message with introduce type
+    std::cout<<"Let me Introduce "<<new_member.address<<":"<<new_member.port<<"\n";
     Message msgIntroducer{MESSAGE_TYPE::INTRODUCE, {new_member}};
     for(const Member &member: getMonitors()) {
+        std::cout<<"Let me Introduce to"<<member.address<<":"<<member.port<<"\n";
         Socket::SendMessage(Message::Serialize(msgIntroducer), member.port, member.address);
     }
 
@@ -203,7 +215,7 @@ void Node::handleLeave(Member &leaving_member) {
 void Node::handleUserCommands()
 {
     std::string command;
-    std::cout << "Commands you can execute:-\n 1. JOIN\n2. LIST_MEM\n3. LEAVE\n";
+    std::cout << "Commands you can execute:-\n1. JOIN\n2. LIST_MEM\n3. LIST_SELF\n4. LEAVE\n5. EXIT\n";
     do
     {
         std::cin >> command;
@@ -222,9 +234,14 @@ void Node::handleUserCommands()
             Socket::SendMessage(Message::Serialize(msgToJoin), env_vars::INTRODUCER_PORT, env_vars::INTRODUCER_ADDRESS);
         }
         else if(command == "LIST_MEM") {
+            mutex_.lock();
             for(const Member& member: members) {
                 member.printDetails();
             }
+            mutex_.unlock();
+        }
+        else if(command == "LIST_SELF") {
+            self__.printDetails();
         }
         else if(command == "LEAVE") {
             if(is_member) {
@@ -237,6 +254,9 @@ void Node::handleUserCommands()
                 is_member = false;
                 mutex_.unlock();
             }
+        }
+        else if(command == "EXIT") {
+
         }
 
     } while (true);
